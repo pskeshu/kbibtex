@@ -1,0 +1,8 @@
+# Core dependencies (all from standard library - no external deps needed)
+# The library works with just Python 3.6+
+
+# Optional dependencies for enhanced functionality
+# Uncomment if you want better HTTP handling and XML parsing:
+# requests>=2.25.0
+# lxml>=4.6.0
+# beautifulsoup4>=4.9.0
