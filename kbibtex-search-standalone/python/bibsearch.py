@@ -109,11 +109,17 @@ class SearchQuery:
     title: Optional[str] = None
     keywords: Optional[str] = None
     year: Optional[str] = None
+    year_from: Optional[str] = None  # Start year for range
+    year_to: Optional[str] = None    # End year for range
     max_results: int = 10
 
     def is_valid(self) -> bool:
         """Check if the query has at least one search parameter."""
-        return any([self.author, self.title, self.keywords, self.year])
+        return any([self.author, self.title, self.keywords, self.year, self.year_from, self.year_to])
+
+    def has_year_range(self) -> bool:
+        """Check if year range is specified."""
+        return self.year_from is not None and self.year_to is not None
 
 
 class LiteratureSearch:
@@ -215,6 +221,23 @@ class LiteratureSearch:
                 self.error_callback(error_msg)
             return []
 
+    def _matches_year_range(self, entry: BibEntry, query: SearchQuery) -> bool:
+        """Check if an entry matches the year range filter."""
+        if not query.has_year_range():
+            return True
+
+        year_str = entry.fields.get("year", "")
+        if not year_str:
+            return True  # Include if no year info
+
+        try:
+            entry_year = int(year_str)
+            from_year = int(query.year_from)
+            to_year = int(query.year_to)
+            return from_year <= entry_year <= to_year
+        except (ValueError, TypeError):
+            return True  # Include if year parsing fails
+
     def _search_native(self, query: SearchQuery,
                       engine: SearchEngine) -> List[BibEntry]:
         """
@@ -255,7 +278,10 @@ class LiteratureSearch:
             terms.append(f"{query.title}[Title]")
         if query.keywords:
             terms.append(f"{query.keywords}[All Fields]")
-        if query.year:
+        # Handle year or year range
+        if query.has_year_range():
+            terms.append(f"{query.year_from}:{query.year_to}[pdat]")
+        elif query.year:
             terms.append(f"{query.year}[pdat]")
 
         if not terms:
@@ -391,7 +417,7 @@ class LiteratureSearch:
 
             for entry_elem in root.findall("atom:entry", ns):
                 entry = self._parse_arxiv_entry(entry_elem, ns)
-                if entry:
+                if entry and self._matches_year_range(entry, query):
                     entries.append(entry)
                     if self.result_callback:
                         self.result_callback(entry)
@@ -488,7 +514,7 @@ class LiteratureSearch:
 
             for item in items:
                 entry = self._parse_crossref_item(item)
-                if entry:
+                if entry and self._matches_year_range(entry, query):
                     entries.append(entry)
                     if self.result_callback:
                         self.result_callback(entry)
@@ -598,7 +624,7 @@ class LiteratureSearch:
 
             for paper in papers:
                 entry = self._parse_semanticscholar_paper(paper)
-                if entry:
+                if entry and self._matches_year_range(entry, query):
                     entries.append(entry)
                     if self.result_callback:
                         self.result_callback(entry)

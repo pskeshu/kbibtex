@@ -70,6 +70,23 @@ public:
     bool cancelFlag = false;
     std::mutex mutex;
 
+    // Helper function to filter entries by year range
+    bool matchesYearRange(const BibEntry& entry, const SearchQuery& query) {
+        if (!query.hasYearRange()) return true;
+
+        auto it = entry.fields.find("year");
+        if (it == entry.fields.end()) return true; // Include if no year info
+
+        try {
+            int entryYear = std::stoi(it->second);
+            int fromYear = std::stoi(query.yearFrom);
+            int toYear = std::stoi(query.yearTo);
+            return entryYear >= fromYear && entryYear <= toYear;
+        } catch (...) {
+            return true; // Include if year parsing fails
+        }
+    }
+
     std::string performHTTPGet(const std::string& url) {
         CURL* curl = curl_easy_init();
         std::string response;
@@ -107,7 +124,11 @@ public:
             if (!searchTerm.empty()) searchTerm += "+AND+";
             searchTerm += query.keywords + "[All Fields]";
         }
-        if (!query.year.empty()) {
+        // Handle year or year range
+        if (query.hasYearRange()) {
+            if (!searchTerm.empty()) searchTerm += "+AND+";
+            searchTerm += query.yearFrom + ":" + query.yearTo + "[pdat]";
+        } else if (!query.year.empty()) {
             if (!searchTerm.empty()) searchTerm += "+AND+";
             searchTerm += query.year + "[pdat]";
         }
@@ -252,7 +273,18 @@ public:
         std::string response = performHTTPGet(url);
 
         // Parse Atom/XML feed (simplified)
-        results = parseArXivXML(response);
+        std::vector<BibEntry> allResults = parseArXivXML(response);
+
+        // Filter by year range if specified
+        if (query.hasYearRange()) {
+            for (const auto& entry : allResults) {
+                if (matchesYearRange(entry, query)) {
+                    results.push_back(entry);
+                }
+            }
+        } else {
+            results = allResults;
+        }
 
         return results;
     }
@@ -413,7 +445,14 @@ public:
                 entry.type = "article";
             }
 
-            results.push_back(entry);
+            // Filter by year range if specified
+            if (query.hasYearRange()) {
+                if (matchesYearRange(entry, query)) {
+                    results.push_back(entry);
+                }
+            } else {
+                results.push_back(entry);
+            }
         }
 
         return results;
@@ -520,7 +559,14 @@ public:
                 }
             }
 
-            results.push_back(entry);
+            // Filter by year range if specified
+            if (query.hasYearRange()) {
+                if (matchesYearRange(entry, query)) {
+                    results.push_back(entry);
+                }
+            } else {
+                results.push_back(entry);
+            }
         }
 
         return results;

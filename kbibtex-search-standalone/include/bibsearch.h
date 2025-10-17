@@ -63,8 +63,15 @@ struct SearchQuery {
     std::string author;
     std::string title;
     std::string keywords; // free text search
-    std::string year;
+    std::string year;      // Single year or empty
+    std::string yearFrom;  // Start year for range (optional)
+    std::string yearTo;    // End year for range (optional)
     int maxResults = 10;
+
+    // Helper to check if year range is specified
+    bool hasYearRange() const {
+        return !yearFrom.empty() && !yearTo.empty();
+    }
 };
 
 // Available search engines

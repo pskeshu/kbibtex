@@ -18,6 +18,8 @@ void printHelp(const char* programName) {
     std::cout << "  -t, --title TITLE         Search by title\n";
     std::cout << "  -k, --keywords KEYWORDS   Search by keywords (free text)\n";
     std::cout << "  -y, --year YEAR          Search by publication year\n";
+    std::cout << "  --year-from YEAR         Start year for range search\n";
+    std::cout << "  --year-to YEAR           End year for range search\n";
     std::cout << "  -n, --max-results NUM    Maximum results per engine (default: 10)\n\n";
     std::cout << "Engine options:\n";
     std::cout << "  -e, --engine ENGINE      Search engine to use:\n";
@@ -31,6 +33,7 @@ void printHelp(const char* programName) {
     std::cout << "  " << programName << " -a \"Smith J\" -y 2023 -e pubmed\n";
     std::cout << "  " << programName << " -k \"machine learning\" -n 20 -f json -o results.json\n";
     std::cout << "  " << programName << " -t \"quantum computing\" -e arxiv\n";
+    std::cout << "  " << programName << " -a \"Einstein\" --year-from 1900 --year-to 1910 -e all\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -61,6 +64,10 @@ int main(int argc, char* argv[]) {
             query.keywords = argv[++i];
         } else if ((arg == "-y" || arg == "--year") && i + 1 < argc) {
             query.year = argv[++i];
+        } else if (arg == "--year-from" && i + 1 < argc) {
+            query.yearFrom = argv[++i];
+        } else if (arg == "--year-to" && i + 1 < argc) {
+            query.yearTo = argv[++i];
         } else if ((arg == "-n" || arg == "--max-results") && i + 1 < argc) {
             query.maxResults = std::stoi(argv[++i]);
         } else if ((arg == "-e" || arg == "--engine") && i + 1 < argc) {
@@ -106,7 +113,8 @@ int main(int argc, char* argv[]) {
         if (!query.author.empty()) std::cerr << " author=\"" << query.author << "\"";
         if (!query.title.empty()) std::cerr << " title=\"" << query.title << "\"";
         if (!query.keywords.empty()) std::cerr << " keywords=\"" << query.keywords << "\"";
-        if (!query.year.empty()) std::cerr << " year=\"" << query.year << "\"";
+        if (query.hasYearRange()) std::cerr << " years=" << query.yearFrom << "-" << query.yearTo;
+        else if (!query.year.empty()) std::cerr << " year=\"" << query.year << "\"";
         std::cerr << " using " << BibSearch::LiteratureSearch::engineToString(engine) << "...\n";
     }
 
