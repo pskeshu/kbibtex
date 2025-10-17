@@ -156,7 +156,8 @@ public:
 
         // Simplified XML parsing using regex (for demonstration)
         // In production, use a proper XML parser like pugixml or tinyxml2
-        std::regex articleRegex("<PubmedArticle>(.*?)</PubmedArticle>", std::regex::dotall);
+        // Using [\s\S] to match any character including newlines
+        std::regex articleRegex("<PubmedArticle>([\\s\\S]*?)</PubmedArticle>");
         std::smatch articleMatch;
         std::string::const_iterator searchStart(xml.cbegin());
 
@@ -260,7 +261,8 @@ public:
         std::vector<BibEntry> entries;
 
         // Simplified XML parsing
-        std::regex entryRegex("<entry>(.*?)</entry>", std::regex::dotall);
+        // Using [\s\S] to match any character including newlines
+        std::regex entryRegex("<entry>([\\s\\S]*?)</entry>");
         std::smatch entryMatch;
         std::string::const_iterator searchStart(xml.cbegin());
 
@@ -302,7 +304,7 @@ public:
             }
 
             // Extract summary/abstract
-            std::regex summaryRegex("<summary>(.*?)</summary>", std::regex::dotall);
+            std::regex summaryRegex("<summary>([\\s\\S]*?)</summary>");
             std::smatch summaryMatch;
             if (std::regex_search(entryXml, summaryMatch, summaryRegex)) {
                 std::string abstract = summaryMatch[1];
@@ -555,6 +557,7 @@ std::vector<BibEntry> Utils::parseBibTeX(const std::string& bibtex) {
     std::vector<BibEntry> entries;
     // Simplified BibTeX parsing - in production use a proper parser
     // This is a placeholder implementation
+    (void)bibtex; // Suppress unused parameter warning
     return entries;
 }
 
