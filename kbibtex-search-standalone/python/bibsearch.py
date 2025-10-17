@@ -236,6 +236,9 @@ class LiteratureSearch:
         if engine in [SearchEngine.CROSSREF, SearchEngine.ALL]:
             results.extend(self._search_crossref_native(query))
 
+        if engine in [SearchEngine.SEMANTIC_SCHOLAR, SearchEngine.ALL]:
+            results.extend(self._search_semanticscholar_native(query))
+
         return results
 
     def _search_pubmed_native(self, query: SearchQuery) -> List[BibEntry]:
@@ -557,6 +560,114 @@ class LiteratureSearch:
 
         except Exception as e:
             logger.warning(f"Failed to parse CrossRef item: {e}")
+            return None
+
+    def _search_semanticscholar_native(self, query: SearchQuery) -> List[BibEntry]:
+        """Native Python implementation of Semantic Scholar search."""
+        import urllib.request
+        import urllib.parse
+
+        # Build query string
+        query_parts = []
+        if query.title:
+            query_parts.append(query.title)
+        if query.author:
+            query_parts.append(query.author)
+        if query.keywords:
+            query_parts.append(query.keywords)
+
+        if not query_parts:
+            return []
+
+        query_str = " ".join(query_parts)
+        query_str = urllib.parse.quote(query_str)
+
+        url = (f"https://api.semanticscholar.org/graph/v1/paper/search?query={query_str}"
+               f"&limit={query.max_results}"
+               f"&fields=paperId,title,authors,year,abstract,url,citationCount,venue,publicationTypes")
+
+        try:
+            req = urllib.request.Request(url)
+            req.add_header("User-Agent", "KBibTeX-Search/1.0")
+
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+
+            papers = data.get("data", [])
+            entries = []
+
+            for paper in papers:
+                entry = self._parse_semanticscholar_paper(paper)
+                if entry:
+                    entries.append(entry)
+                    if self.result_callback:
+                        self.result_callback(entry)
+
+            return entries
+
+        except Exception as e:
+            error_msg = f"Semantic Scholar search failed: {str(e)}"
+            logger.error(error_msg)
+            if self.error_callback:
+                self.error_callback(error_msg)
+            return []
+
+    def _parse_semanticscholar_paper(self, paper: Dict) -> Optional[BibEntry]:
+        """Parse a Semantic Scholar paper."""
+        try:
+            paper_id = paper.get("paperId", "")
+            if not paper_id:
+                return None
+
+            entry = BibEntry(id=f"s2_{paper_id}", type="article")
+
+            # Extract title
+            if "title" in paper:
+                entry.fields["title"] = paper["title"]
+
+            # Extract authors
+            if "authors" in paper and isinstance(paper["authors"], list):
+                authors = []
+                for author in paper["authors"]:
+                    if "name" in author:
+                        authors.append(author["name"])
+                if authors:
+                    entry.fields["author"] = " and ".join(authors)
+
+            # Extract year
+            if "year" in paper and paper["year"]:
+                entry.fields["year"] = str(paper["year"])
+
+            # Extract abstract
+            if "abstract" in paper and paper["abstract"]:
+                entry.fields["abstract"] = paper["abstract"]
+
+            # Extract URL
+            if "url" in paper and paper["url"]:
+                entry.fields["url"] = paper["url"]
+
+            # Extract venue (journal/conference)
+            if "venue" in paper and paper["venue"]:
+                entry.fields["journal"] = paper["venue"]
+
+            # Extract citation count
+            if "citationCount" in paper and paper["citationCount"] is not None:
+                entry.fields["note"] = f"Cited by {paper['citationCount']}"
+
+            # Determine entry type based on publication types
+            if "publicationTypes" in paper and isinstance(paper["publicationTypes"], list):
+                for pub_type in paper["publicationTypes"]:
+                    if pub_type == "Conference":
+                        entry.type = "inproceedings"
+                        break
+                    elif pub_type == "Book":
+                        entry.type = "book"
+                        break
+
+            return entry
+
+        except Exception as e:
+            logger.warning(f"Failed to parse Semantic Scholar paper: {e}")
             return None
 
 

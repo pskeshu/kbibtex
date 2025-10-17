@@ -418,6 +418,113 @@ public:
 
         return results;
     }
+
+    std::vector<BibEntry> searchSemanticScholar(const SearchQuery& query) {
+        std::vector<BibEntry> results;
+
+        // Build query string for Semantic Scholar API
+        std::string queryStr;
+        if (!query.title.empty()) queryStr += query.title + " ";
+        if (!query.author.empty()) queryStr += query.author + " ";
+        if (!query.keywords.empty()) queryStr += query.keywords;
+
+        if (queryStr.empty()) return results;
+
+        queryStr = urlEncode(queryStr);
+
+        // Semantic Scholar API v1 - no authentication required for basic searches
+        std::string url = "https://api.semanticscholar.org/graph/v1/paper/search?query=" + queryStr
+                         + "&limit=" + std::to_string(query.maxResults)
+                         + "&fields=paperId,title,authors,year,abstract,url,citationCount,venue,publicationTypes";
+
+        std::string response = performHTTPGet(url);
+
+        // Parse JSON response
+        Json::Value root;
+        Json::Reader reader;
+        if (!reader.parse(response, root)) {
+            if (errorCallback) errorCallback("Failed to parse Semantic Scholar response");
+            return results;
+        }
+
+        Json::Value papers = root["data"];
+        if (!papers.isArray()) return results;
+
+        for (const auto& paper : papers) {
+            BibEntry entry;
+
+            // Extract paper ID
+            if (paper.isMember("paperId")) {
+                entry.id = "s2_" + paper["paperId"].asString();
+            }
+
+            // Extract title
+            if (paper.isMember("title")) {
+                entry.fields["title"] = paper["title"].asString();
+            }
+
+            // Extract authors
+            if (paper.isMember("authors") && paper["authors"].isArray()) {
+                std::string authors;
+                for (const auto& author : paper["authors"]) {
+                    if (author.isMember("name")) {
+                        if (!authors.empty()) authors += " and ";
+                        authors += author["name"].asString();
+                    }
+                }
+                if (!authors.empty()) {
+                    entry.fields["author"] = authors;
+                }
+            }
+
+            // Extract year
+            if (paper.isMember("year") && !paper["year"].isNull()) {
+                entry.fields["year"] = std::to_string(paper["year"].asInt());
+            }
+
+            // Extract abstract
+            if (paper.isMember("abstract") && !paper["abstract"].isNull()) {
+                entry.fields["abstract"] = paper["abstract"].asString();
+            }
+
+            // Extract URL
+            if (paper.isMember("url") && !paper["url"].isNull()) {
+                entry.fields["url"] = paper["url"].asString();
+            }
+
+            // Extract venue (journal/conference)
+            if (paper.isMember("venue") && !paper["venue"].isNull()) {
+                std::string venue = paper["venue"].asString();
+                if (!venue.empty()) {
+                    entry.fields["journal"] = venue;
+                }
+            }
+
+            // Extract citation count (as a note)
+            if (paper.isMember("citationCount") && !paper["citationCount"].isNull()) {
+                entry.fields["note"] = "Cited by " + std::to_string(paper["citationCount"].asInt());
+            }
+
+            // Determine entry type
+            entry.type = "article";
+            if (paper.isMember("publicationTypes") && paper["publicationTypes"].isArray()) {
+                for (const auto& pubType : paper["publicationTypes"]) {
+                    std::string type = pubType.asString();
+                    if (type == "Conference") {
+                        entry.type = "inproceedings";
+                        break;
+                    } else if (type == "Book") {
+                        entry.type = "book";
+                        break;
+                    }
+                }
+            }
+
+            results.push_back(entry);
+        }
+
+        return results;
+    }
 };
 
 // LiteratureSearch implementation
@@ -459,6 +566,9 @@ std::vector<BibEntry> LiteratureSearch::search(const SearchQuery& query, SearchE
             case SearchEngine::CrossRef:
                 results = pImpl->searchCrossRef(query);
                 break;
+            case SearchEngine::SemanticScholar:
+                results = pImpl->searchSemanticScholar(query);
+                break;
             default:
                 break;
         }
@@ -476,7 +586,7 @@ std::vector<BibEntry> LiteratureSearch::search(const SearchQuery& query, SearchE
         searchSingleEngine(SearchEngine::PubMed);
         searchSingleEngine(SearchEngine::ArXiv);
         searchSingleEngine(SearchEngine::CrossRef);
-        // Add more engines as needed
+        searchSingleEngine(SearchEngine::SemanticScholar);
     } else {
         searchSingleEngine(engine);
     }
@@ -496,7 +606,10 @@ void LiteratureSearch::cancelSearch() {
 }
 
 std::vector<std::string> LiteratureSearch::getAvailableEngines() {
-    return {"PubMed", "ArXiv", "CrossRef", "GoogleScholar", "IEEE", "ACM", "SemanticScholar"};
+    return {"PubMed", "ArXiv", "CrossRef", "SemanticScholar"};
+    // Note: GoogleScholar, IEEE, and ACM are not yet implemented
+    // GoogleScholar is particularly difficult due to lack of official API and anti-bot measures
+    // IEEE and ACM require API keys
 }
 
 std::string LiteratureSearch::engineToString(SearchEngine engine) {
