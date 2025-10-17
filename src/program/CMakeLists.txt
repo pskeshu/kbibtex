@@ -34,6 +34,11 @@ set(
     commandline.cpp
 )
 
+set(
+    kbibtexsearchprogram_SRCS
+    commandline-search.cpp
+)
+
 ecm_qt_declare_logging_category(kbibtexprogram_SRCS
     HEADER logging_program.h
     IDENTIFIER LOG_KBIBTEX_PROGRAM
