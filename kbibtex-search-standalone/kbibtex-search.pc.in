@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: KBibTeX Search
+Description: Literature search library for academic databases
+Version: @PROJECT_VERSION@
+Requires: libcurl jsoncpp
+Libs: -L${libdir} -lbibsearch
+Cflags: -I${includedir}
