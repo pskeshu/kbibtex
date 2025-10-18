@@ -22,10 +22,9 @@ import bibsearch
 
 # Simple search returning JSON
 results = bibsearch.search(
-    author="Einstein A",
-    year="1905",
+    keywords="deep learning",
     max_results=5,
-    engine="all"
+    engine="semanticscholar"
 )
 
 # Print results
@@ -336,6 +335,7 @@ To add a new search engine:
 - Complex queries might not be supported by all engines
 - Results are limited to what each API provides
 - No authentication support for restricted databases
+- **Historical papers**: Papers published before ~1990 may not be well-indexed in modern databases. For example, Einstein's 1905 papers won't be found by year search. Instead, search by **title** (e.g., `title="Electrodynamics of Moving Bodies"`) to find reprints and highly-cited versions
 
 ## License
 

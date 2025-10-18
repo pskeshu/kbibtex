@@ -70,20 +70,37 @@ public:
     bool cancelFlag = false;
     std::mutex mutex;
 
-    // Helper function to filter entries by year range
-    bool matchesYearRange(const BibEntry& entry, const SearchQuery& query) {
-        if (!query.hasYearRange()) return true;
+    // Helper function to filter entries by year filter (single year or range)
+    bool matchesYearFilter(const BibEntry& entry, const SearchQuery& query) {
+        // If no year filter at all, accept everything
+        if (!query.hasYearRange() && query.year.empty()) {
+            return true;
+        }
 
         auto it = entry.fields.find("year");
-        if (it == entry.fields.end()) return true; // Include if no year info
+        if (it == entry.fields.end()) {
+            return false; // Reject if year filter is set but paper has no year
+        }
 
         try {
             int entryYear = std::stoi(it->second);
-            int fromYear = std::stoi(query.yearFrom);
-            int toYear = std::stoi(query.yearTo);
-            return entryYear >= fromYear && entryYear <= toYear;
+
+            // Check year range if specified
+            if (query.hasYearRange()) {
+                int fromYear = std::stoi(query.yearFrom);
+                int toYear = std::stoi(query.yearTo);
+                return entryYear >= fromYear && entryYear <= toYear;
+            }
+
+            // Check single year if specified
+            if (!query.year.empty()) {
+                int queryYear = std::stoi(query.year);
+                return entryYear == queryYear;
+            }
+
+            return true;
         } catch (...) {
-            return true; // Include if year parsing fails
+            return false; // Reject if year parsing fails when filter is active
         }
     }
 
@@ -278,7 +295,7 @@ public:
         // Filter by year range if specified
         if (query.hasYearRange()) {
             for (const auto& entry : allResults) {
-                if (matchesYearRange(entry, query)) {
+                if (matchesYearFilter(entry, query)) {
                     results.push_back(entry);
                 }
             }
@@ -447,7 +464,7 @@ public:
 
             // Filter by year range if specified
             if (query.hasYearRange()) {
-                if (matchesYearRange(entry, query)) {
+                if (matchesYearFilter(entry, query)) {
                     results.push_back(entry);
                 }
             } else {
@@ -561,7 +578,7 @@ public:
 
             // Filter by year range if specified
             if (query.hasYearRange()) {
-                if (matchesYearRange(entry, query)) {
+                if (matchesYearFilter(entry, query)) {
                     results.push_back(entry);
                 }
             } else {

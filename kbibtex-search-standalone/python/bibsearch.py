@@ -221,22 +221,33 @@ class LiteratureSearch:
                 self.error_callback(error_msg)
             return []
 
-    def _matches_year_range(self, entry: BibEntry, query: SearchQuery) -> bool:
-        """Check if an entry matches the year range filter."""
-        if not query.has_year_range():
+    def _matches_year_filter(self, entry: BibEntry, query: SearchQuery) -> bool:
+        """Check if an entry matches the year filter."""
+        # If no year filter at all, accept everything
+        if not query.has_year_range() and not query.year:
             return True
 
         year_str = entry.fields.get("year", "")
         if not year_str:
-            return True  # Include if no year info
+            return False  # Reject if year filter is set but paper has no year
 
         try:
             entry_year = int(year_str)
-            from_year = int(query.year_from)
-            to_year = int(query.year_to)
-            return from_year <= entry_year <= to_year
+
+            # Check year range if specified
+            if query.has_year_range():
+                from_year = int(query.year_from)
+                to_year = int(query.year_to)
+                return from_year <= entry_year <= to_year
+
+            # Check single year if specified
+            if query.year:
+                query_year = int(query.year)
+                return entry_year == query_year
+
+            return True
         except (ValueError, TypeError):
-            return True  # Include if year parsing fails
+            return False  # Reject if year parsing fails when filter is active
 
     def _search_native(self, query: SearchQuery,
                       engine: SearchEngine) -> List[BibEntry]:
@@ -417,7 +428,7 @@ class LiteratureSearch:
 
             for entry_elem in root.findall("atom:entry", ns):
                 entry = self._parse_arxiv_entry(entry_elem, ns)
-                if entry and self._matches_year_range(entry, query):
+                if entry and self._matches_year_filter(entry, query):
                     entries.append(entry)
                     if self.result_callback:
                         self.result_callback(entry)
@@ -514,7 +525,7 @@ class LiteratureSearch:
 
             for item in items:
                 entry = self._parse_crossref_item(item)
-                if entry and self._matches_year_range(entry, query):
+                if entry and self._matches_year_filter(entry, query):
                     entries.append(entry)
                     if self.result_callback:
                         self.result_callback(entry)
@@ -624,7 +635,7 @@ class LiteratureSearch:
 
             for paper in papers:
                 entry = self._parse_semanticscholar_paper(paper)
-                if entry and self._matches_year_range(entry, query):
+                if entry and self._matches_year_filter(entry, query):
                     entries.append(entry)
                     if self.result_callback:
                         self.result_callback(entry)
@@ -748,11 +759,15 @@ def search_to_bibtex(author: Optional[str] = None,
     return "\n\n".join([entry.to_bibtex() for entry in results])
 
 
-# CLI interface when run as a script
-if __name__ == "__main__":
+# CLI interface main function
+def main():
+    """Main entry point for the command-line interface."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Literature Search Tool")
+    parser = argparse.ArgumentParser(
+        description="KBibTeX Literature Search Tool - Search academic databases",
+        epilog="Example: bibsearch -k 'machine learning' -y 2023 -e arxiv"
+    )
     parser.add_argument("-a", "--author", help="Search by author")
     parser.add_argument("-t", "--title", help="Search by title")
     parser.add_argument("-k", "--keywords", help="Search by keywords")
@@ -762,34 +777,58 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--format", choices=["json", "bibtex"], default="json",
                        help="Output format")
     parser.add_argument("-o", "--output", help="Output file")
+    parser.add_argument("--list-engines", action="store_true", help="List available search engines")
 
     args = parser.parse_args()
 
-    # Perform search
-    if args.format == "json":
-        results = search(
-            author=args.author,
-            title=args.title,
-            keywords=args.keywords,
-            year=args.year,
-            max_results=args.max_results,
-            engine=args.engine
-        )
-        output = json.dumps(results, indent=2)
-    else:
-        output = search_to_bibtex(
-            author=args.author,
-            title=args.title,
-            keywords=args.keywords,
-            year=args.year,
-            max_results=args.max_results,
-            engine=args.engine
-        )
+    # List engines if requested
+    if args.list_engines:
+        print("Available search engines:")
+        for engine in SearchEngine:
+            print(f"  - {engine.value}")
+        return 0
 
-    # Write output
-    if args.output:
-        with open(args.output, "w") as f:
-            f.write(output)
-        print(f"Results written to {args.output}")
-    else:
-        print(output)
+    # Check if at least one search parameter is provided
+    if not any([args.author, args.title, args.keywords, args.year]):
+        parser.error("At least one search parameter is required (-a, -t, -k, or -y)")
+
+    # Perform search
+    try:
+        if args.format == "json":
+            results = search(
+                author=args.author,
+                title=args.title,
+                keywords=args.keywords,
+                year=args.year,
+                max_results=args.max_results,
+                engine=args.engine
+            )
+            output = json.dumps(results, indent=2)
+        else:
+            output = search_to_bibtex(
+                author=args.author,
+                title=args.title,
+                keywords=args.keywords,
+                year=args.year,
+                max_results=args.max_results,
+                engine=args.engine
+            )
+
+        # Write output
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(output)
+            print(f"Results written to {args.output}")
+        else:
+            print(output)
+
+        return 0
+    except Exception as e:
+        print(f"Error: {e}", file=__import__('sys').stderr)
+        return 1
+
+
+# CLI interface when run as a script
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
